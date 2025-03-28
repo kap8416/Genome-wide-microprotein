@@ -1,0 +1,77 @@
+---
+title: "Prediction of Intrinsically Disordered Regions (IDRs)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+if (!require("ggplot2")) install.packages("ggplot2", dependencies = TRUE)
+if (!require("readr")) install.packages("readr", dependencies = TRUE)
+if (!require("dplyr")) install.packages("dplyr", dependencies = TRUE)
+
+library(ggplot2)
+library(readr)
+library(dplyr)
+```
+
+## Load and Prepare Data
+
+```{r}
+proteins_file <- "Proteinas_con_DisProt_Final.csv"
+df_proteins <- read_csv(proteins_file, show_col_types = FALSE)
+
+df_proteins <- df_proteins %>%
+  mutate(MIP_Type = ifelse(MIP_Type == "Single-copy", "Species-specific", MIP_Type))
+
+df_test <- df_proteins %>%
+  filter(!is.na(DisProt_Disorder_Fraction.y))
+```
+
+## Correlation Analysis
+
+```{r}
+cat("\n Pearson correlation (Predicted vs Length):\n")
+pearson_predicted <- cor.test(df_test$Fraction_Disordered, df_test$Total_Count, method = "pearson")
+print(pearson_predicted)
+
+cat("\n Spearman correlation (Predicted vs Length):\n")
+spearman_predicted <- cor.test(df_test$Fraction_Disordered, df_test$Total_Count, method = "spearman")
+print(spearman_predicted)
+
+cat("\n Pearson correlation (DisProt vs Length):\n")
+pearson_disprot <- cor.test(df_test$DisProt_Disorder_Fraction.y, df_test$Total_Count, method = "pearson")
+print(pearson_disprot)
+
+cat("\n Spearman correlation (DisProt vs Length):\n")
+spearman_disprot <- cor.test(df_test$DisProt_Disorder_Fraction.y, df_test$Total_Count, method = "spearman")
+print(spearman_disprot)
+```
+
+## Statistical Tests
+
+```{r}
+t_test_result <- t.test(df_test$Fraction_Disordered, df_test$DisProt_Disorder_Fraction.y, paired = TRUE)
+wilcox_result <- wilcox.test(df_test$Fraction_Disordered, df_test$DisProt_Disorder_Fraction.y, paired = TRUE)
+
+cat("Paired t-test:\n")
+print(t_test_result)
+
+cat("\n Wilcoxon signed-rank test:\n")
+print(wilcox_result)
+```
+
+## Visualization: Predicted vs Experimental Disorder
+
+```{r}
+ggplot(df_proteins, aes(x = reorder(InterPro_Domain, -Fraction_Disordered), fill = MIP_Type)) +
+  geom_bar(aes(y = Fraction_Disordered), stat = "identity", position = "dodge") +
+  geom_point(aes(y = DisProt_Disorder_Fraction.y), color = "red", size = 3, shape = 17) +
+  labs(x = "InterPro Domain", y = "Fraction of Disordered Residues",
+       title = "Comparison of Predicted vs Experimental Disorder Fractions (DisProt)") +
+  scale_fill_manual(values = c("Homologous" = "blue", "Species-specific" = "green")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```

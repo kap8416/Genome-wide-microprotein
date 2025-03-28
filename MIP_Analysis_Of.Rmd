@@ -1,0 +1,292 @@
+---
+title: "GENOME_WIDE MIP ANALYSIS"
+output: html_document
+By
+Fernanda Román Garcia
+Katia Aviña Padilla
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(ggrepel)
+library(tidyverse)
+library(tidyr)
+library(stringr)
+```
+
+```{r}
+# Load and clean the data
+data <- read_tsv("final_results_of.txt")
+data$MIP_TYPE <- ifelse(data$MIP_TYPE == "Single-copy", "Species-specific", data$MIP_TYPE)
+```
+
+## Microprotein Type Distribution
+
+```{r}
+mip_counts <- table(data$MIP_TYPE)
+mip_df <- as.data.frame(mip_counts)
+colnames(mip_df) <- c("MIP_Type", "Count")
+
+ggplot(mip_df, aes(x = MIP_Type, y = Count, fill = MIP_Type)) +
+  geom_bar(stat = "identity") +
+  labs(title = "MIP Type Distribution", x = "MIP Type", y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_text(aes(label = Count), vjust = -0.5)
+```
+
+## Length Distribution by Ranges
+
+```{r}
+data$Length_Category <- cut(data$LENGTH,
+                            breaks = c(15, 30, 60, 90, 120, 150),
+                            labels = c("15-30", "31-60", "61-90", "91-120", "121-150"),
+                            include.lowest = TRUE)
+
+length_counts <- data %>%
+  group_by(Length_Category) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = round((Count / sum(Count)) * 100, 1))
+
+ggplot(length_counts, aes(x = "", y = Count, fill = Length_Category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  labs(title = "MIP Length Distribution") +
+  theme_void() +
+  geom_label_repel(aes(label = paste0(Percentage, "%")),
+                   position = position_stack(vjust = 0.5),
+                   show.legend = FALSE,
+                   box.padding = 0.5,
+                   point.padding = 0.5,
+                   force = 1,
+                   size = 5)
+```
+
+## Instability Index by Microprotein Type
+
+```{r}
+df <- read.table("final_results_of.txt", sep = "\t", header = TRUE, quote = "", fill = TRUE)
+df$MIP_TYPE <- ifelse(df$MIP_TYPE == "Single-copy", "Species-specific", df$MIP_TYPE)
+
+ggplot(df, aes(x = MIP_TYPE, y = INSTABILITY_INDEX, fill = MIP_TYPE)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.1, outlier.size = 1) +
+  labs(title = "Violin Plot: Instability Index by Microprotein Type",
+       x = "Microprotein Type", y = "Instability Index") +
+  scale_fill_manual(values = c("Homologous" = "#F8766D", "Species-specific" = "#00BFC4")) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none", plot.title = element_text(face = "bold", size = 14))
+```
+
+## Length Distribution by Microprotein Type
+
+```{r}
+ggplot(df, aes(x = MIP_TYPE, y = LENGTH, fill = MIP_TYPE)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.1, outlier.size = 1) +
+  labs(title = "Length Distribution by Microprotein Type",
+       x = "Microprotein Type", y = "Length (Amino Acids)") +
+  scale_fill_manual(values = c("Homologous" = "#F8766D", "Species-specific" = "#00BFC4")) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none", plot.title = element_text(face = "bold", size = 14))
+```
+
+## Length vs. Instability Index
+
+```{r}
+ggplot(df, aes(x = LENGTH, y = INSTABILITY_INDEX, color = MIP_TYPE)) +
+  geom_point(alpha = 0.7, size = 1.5) +
+  labs(title = "Relationship between Length and Instability Index",
+       x = "Length (Amino Acids)", y = "Instability Index", color = "Microprotein Type") +
+  scale_color_manual(values = c("Homologous" = "#F8766D", "Species-specific" = "#00BFC4")) +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold", size = 14))
+```
+
+## Correlation Analysis
+
+```{r}
+df$LENGTH <- as.numeric(df$LENGTH)
+df$INSTABILITY_INDEX <- as.numeric(df$INSTABILITY_INDEX)
+df_filtered <- df %>% filter(!is.na(LENGTH), !is.na(INSTABILITY_INDEX))
+
+cat("Spearman correlation:\n")
+print(cor.test(df_filtered$LENGTH, df_filtered$INSTABILITY_INDEX, method = "spearman"))
+
+cat("\nPearson correlation:\n")
+print(cor.test(df_filtered$LENGTH, df_filtered$INSTABILITY_INDEX, method = "pearson"))
+```
+
+## Statistical Tests
+
+```{r}
+shapiro_test <- by(data$INSTABILITY_INDEX, data$MIP_TYPE, shapiro.test)
+print(shapiro_test)
+
+t_test <- t.test(INSTABILITY_INDEX ~ MIP_TYPE, data = data)
+print(t_test)
+
+wilcox_test <- wilcox.test(INSTABILITY_INDEX ~ MIP_TYPE, data = data)
+print(wilcox_test)
+```
+
+## InterPro Domain Analysis
+
+```{r}
+df <- read.table("final_results_of.txt", sep="\t", header=TRUE, quote="", fill=TRUE)
+df$MIP_TYPE <- ifelse(df$MIP_TYPE == "Single-copy", "Species-specific", df$MIP_TYPE)
+
+df <- df %>%
+  mutate(Length_Group = case_when(
+    LENGTH < 40 ~ "<40",
+    LENGTH >= 40 & LENGTH < 80 ~ "40-80",
+    LENGTH >= 80 & LENGTH <= 100 ~ "80-100",
+    LENGTH > 100 ~ ">100"
+  ))
+
+df_exploded <- df %>%
+  separate_rows(INTERPRO_DOMAINS, sep=";") %>%
+  filter(!is.na(INTERPRO_DOMAINS) & INTERPRO_DOMAINS != "")
+
+domain_counts <- df_exploded %>%
+  group_by(Length_Group, INTERPRO_DOMAINS, MIP_TYPE) %>%
+  summarise(Frequency = n(), .groups = "drop")
+
+top_domains <- domain_counts %>%
+  group_by(INTERPRO_DOMAINS) %>%
+  summarise(Total_Frequency = sum(Frequency)) %>%
+  top_n(10, Total_Frequency) %>%
+  pull(INTERPRO_DOMAINS)
+
+domain_top_filtered <- domain_counts %>%
+  filter(INTERPRO_DOMAINS %in% top_domains)
+
+domain_top_filtered$MIP_TYPE <- factor(domain_top_filtered$MIP_TYPE, levels = c("Species-specific", "Homologous"))
+
+ggplot(domain_top_filtered, aes(x = Length_Group, y = Frequency, fill = INTERPRO_DOMAINS)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Domains frequency by Length Group", x = "Microprotein Length Group", y = "InterPro Domain Frequency", fill = "InterPro Domains") +
+  facet_wrap(~MIP_TYPE, ncol = 1, scales = "free_y") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  scale_fill_brewer(palette = "Paired")
+```
+
+## Combined InterPro Domain Heatmap
+
+```{r}
+domain_counts <- df_exploded %>%
+  group_by(INTERPRO_DOMAINS, MIP_TYPE) %>%
+  summarise(Frequency = n(), .groups = "drop")
+
+species_domains <- domain_counts %>%
+  filter(MIP_TYPE == "Species-specific" & Frequency >= 2) %>%
+  pull(INTERPRO_DOMAINS)
+
+homologous_domains <- domain_counts %>%
+  filter(MIP_TYPE == "Homologous") %>%
+  slice_max(Frequency, n = 20) %>%
+  pull(INTERPRO_DOMAINS)
+
+top_domains <- union(species_domains, homologous_domains)
+
+filtered_data <- domain_counts %>%
+  filter(INTERPRO_DOMAINS %in% top_domains)
+
+filtered_data <- filtered_data %>%
+  group_by(INTERPRO_DOMAINS) %>%
+  mutate(Total = sum(Frequency)) %>%
+  ungroup() %>%
+  mutate(INTERPRO_DOMAINS = str_wrap(INTERPRO_DOMAINS, width = 40),
+         INTERPRO_DOMAINS = fct_reorder(INTERPRO_DOMAINS, Total))
+
+ggplot(filtered_data, aes(x = MIP_TYPE, y = INTERPRO_DOMAINS, fill = Frequency)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "white", high = "red", name = "Frequency") +
+  labs(title = "InterPro Domain Frequency by Microprotein Type", x = "Microprotein Type", y = "InterPro Domain") +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.y = element_text(size = 7, lineheight = 0.8),
+    axis.text.x = element_text(size = 12),
+    plot.title = element_text(face = "bold", size = 15)
+  )
+```
+#Prediction of Intrinsically Disordered Regions (IDRs)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+if (!require("ggplot2")) install.packages("ggplot2", dependencies = TRUE)
+if (!require("readr")) install.packages("readr", dependencies = TRUE)
+if (!require("dplyr")) install.packages("dplyr", dependencies = TRUE)
+
+library(ggplot2)
+library(readr)
+library(dplyr)
+```
+
+## Load and Prepare Data
+
+```{r}
+proteins_file <- "Proteinas_con_DisProt_Final.csv"
+df_proteins <- read_csv(proteins_file, show_col_types = FALSE)
+
+df_proteins <- df_proteins %>%
+  mutate(MIP_Type = ifelse(MIP_Type == "Single-copy", "Species-specific", MIP_Type))
+
+df_test <- df_proteins %>%
+  filter(!is.na(DisProt_Disorder_Fraction.y))
+```
+
+## Correlation Analysis
+
+```{r}
+cat("\n Pearson correlation (Predicted vs Length):\n")
+pearson_predicted <- cor.test(df_test$Fraction_Disordered, df_test$Total_Count, method = "pearson")
+print(pearson_predicted)
+
+cat("\n Spearman correlation (Predicted vs Length):\n")
+spearman_predicted <- cor.test(df_test$Fraction_Disordered, df_test$Total_Count, method = "spearman")
+print(spearman_predicted)
+
+cat("\n Pearson correlation (DisProt vs Length):\n")
+pearson_disprot <- cor.test(df_test$DisProt_Disorder_Fraction.y, df_test$Total_Count, method = "pearson")
+print(pearson_disprot)
+
+cat("\n Spearman correlation (DisProt vs Length):\n")
+spearman_disprot <- cor.test(df_test$DisProt_Disorder_Fraction.y, df_test$Total_Count, method = "spearman")
+print(spearman_disprot)
+```
+
+## Statistical Tests
+
+```{r}
+t_test_result <- t.test(df_test$Fraction_Disordered, df_test$DisProt_Disorder_Fraction.y, paired = TRUE)
+wilcox_result <- wilcox.test(df_test$Fraction_Disordered, df_test$DisProt_Disorder_Fraction.y, paired = TRUE)
+
+cat("Paired t-test:\n")
+print(t_test_result)
+
+cat("\n Wilcoxon signed-rank test:\n")
+print(wilcox_result)
+```
+
+## Visualization: Predicted vs Experimental Disorder
+
+```{r}
+ggplot(df_proteins, aes(x = reorder(InterPro_Domain, -Fraction_Disordered), fill = MIP_Type)) +
+  geom_bar(aes(y = Fraction_Disordered), stat = "identity", position = "dodge") +
+  geom_point(aes(y = DisProt_Disorder_Fraction.y), color = "red", size = 3, shape = 17) +
+  labs(x = "InterPro Domain", y = "Fraction of Disordered Residues",
+       title = "Comparison of Predicted vs Experimental Disorder Fractions (DisProt)") +
+  scale_fill_manual(values = c("Homologous" = "blue", "Species-specific" = "green")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
