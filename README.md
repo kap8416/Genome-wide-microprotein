@@ -61,8 +61,7 @@ Ensure the following tools and databases are installed:
 ```
 
 ## Authors
-Developed by Fernanda Román García and **[Katia Aviña Padilla](https://www.researchgate.net/profile/Katia-Avina-Padilla?ev=hdr_xprf&_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6ImhvbWUiLCJwYWdlIjoiaG9tZSIsInBvc2l0aW9uIjoiZ2xvYmFsSGVhZGVyIn19)**.
-
+Developed by Fernanda Román García and Katia Aviña Padilla
 
 ## Citation
 If you use this pipeline, please cite:
